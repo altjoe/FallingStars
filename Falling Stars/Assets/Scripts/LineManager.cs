@@ -14,26 +14,33 @@ public class LineManager : MonoBehaviour
 
     void Start()
     {
-        Barrier barrier = new Barrier(3, line);
-        
-    }
+        GameObject pivot = Instantiate(star, Vector3.zero, Quaternion.identity);
+        Vector2 size = pivot.transform.localScale;
+        float margin = size.magnitude * 0.9f;
+        Barrier barrier = new Barrier(3, line, pivot, margin);
 
-    class Barrier {
-        public int ysize = 1;
-        GameObject l;
-        double margin = 0.5;
-        
-        public Barrier(int size, GameObject line) {
-            l = Instantiate(line, new Vector3(0, 0, 0), Quaternion.identity);
-            Vector3 lscale = l.transform.localScale;
-            lscale.y *= size;
-            l.transform.localScale = lscale;
-        }
     }
 
     // Update is called once per frame
     void Update()
     {
         
+    }
+
+
+    class Barrier {
+        public int ysize = 1;
+        GameObject l;
+        
+        public Barrier(int size, GameObject line, GameObject parent, float margin) {
+            l = Instantiate(line, Vector3.zero, Quaternion.identity);
+            Vector3 lscale = l.transform.localScale;
+            lscale.y *= size;
+            l.transform.localScale = lscale;
+            Vector3 loc = l.transform.localPosition;
+            loc.y += (lscale.y / 2) + margin;
+            l.transform.localPosition = loc;
+            l.transform.parent = parent.transform;
+        }
     }
 }
