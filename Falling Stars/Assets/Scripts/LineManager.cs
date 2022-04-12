@@ -17,7 +17,7 @@ public class LineManager : MonoBehaviour
     {
         Vector2 size = pivot_prefab.transform.localScale;
         margin = size.magnitude * 0.9f;
-        Barrier first_barrier = new Barrier(3, new Vector2(0, 6), line_prefab, pivot_prefab, margin);
+        Barrier first_barrier = new Barrier(3, new Vector2(0, start_line.transform.localPosition.y), line_prefab, pivot_prefab, margin);
         barriers.Add(first_barrier);
     }
 
