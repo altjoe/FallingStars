@@ -25,7 +25,7 @@ public class LineManager : MonoBehaviour
         margin = size.magnitude * 0.9f;
         line_size = line_prefab.transform.localScale.y;
 
-        Barrier new_barrier = new Barrier(new Vector2(0, start_line.localPosition.y), difficulty, line_size, margin);
+        Barrier new_barrier = new Barrier(new Vector2(0, start_line.localPosition.y), difficulty, line_size, margin, 360);
         new_barrier.visualize(line_prefab, pivot_prefab);
         barriers.Add(new_barrier);
     }   
@@ -43,7 +43,8 @@ public class LineManager : MonoBehaviour
     }
 
     void new_barrier(){
-        Barrier new_barrier = new Barrier(barriers[barriers.Count - 1].next_pt, difficulty, line_size, margin);
+        Barrier prev_barrier = barriers[barriers.Count-1];
+        Barrier new_barrier = new Barrier(prev_barrier.next_pt, difficulty, line_size, margin, prev_barrier.angle);
         new_barrier.visualize(line_prefab, pivot_prefab);
         barriers.Add(new_barrier);
     }
@@ -60,7 +61,7 @@ public class LineManager : MonoBehaviour
         public Transform line;
         public Transform pivot;
 
-        public Barrier(Vector2 position, GameLevel level, float line_size, float margin) {
+        public Barrier(Vector2 position, GameLevel level, float line_size, float margin, float prev_angle) {
             pivot_pt = position;
 
             do {
@@ -70,12 +71,27 @@ public class LineManager : MonoBehaviour
                 next_pt = new Vector2(0, line_scale * line_size + margin * 2);
                 next_pt = Quaternion.Euler(0, 0, angle) * next_pt;
                 next_pt += pivot_pt;
-            } while (next_pt.x < -2.6 || next_pt.x > 2.6); 
+            } while (!meets_contraints(prev_angle, angle, next_pt)); 
 
             line_pt = new Vector2(0, (line_scale * line_size)/2 + margin);
             line_pt = Quaternion.Euler(0, 0, angle) * line_pt;
             line_pt += pivot_pt;
         }
+
+        public bool meets_contraints(float prev_angle, float curr_angle, Vector2 test_pt) {
+            if (next_pt.x < -2.6 || next_pt.x > 2.6) {
+                return false;
+            }
+
+            if (curr_angle >= 0 && prev_angle == curr_angle - 180) {
+                return false;
+            } else if (curr_angle < 0 && prev_angle == curr_angle + 180) {
+                return false;
+            }
+            return true;
+        }
+
+
 
         public void visualize(GameObject l, GameObject p) {
             line = Instantiate(l, line_pt, Quaternion.Euler(0, 0, angle)).transform;
@@ -88,7 +104,7 @@ public class LineManager : MonoBehaviour
 
         public float get_line_length(GameLevel level) {
             if (level == GameLevel.Easy) {
-                return Random.Range(5, 7);
+                return Random.Range(7, 13);
             }
             return 5f;
         }
