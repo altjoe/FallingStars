@@ -7,143 +7,90 @@ public class LineManager : MonoBehaviour
     // Start is called before the first frame update
     public GameObject pivot_prefab;
     public GameObject line_prefab;
+
     public Transform start_line;
     public Transform finish_line;
-    public Transform left_bound;
-    public Transform right_bound;
-
     public float barrier_speed = 0.001f;
-    private GameLevel difficulty;
 
+    private GameLevel difficulty;
     List<Barrier> barriers = new List<Barrier>();
     float margin;
+    float line_size;
+
     void Start()
     {
         difficulty = GameLevel.Easy;
+
         Vector2 size = pivot_prefab.transform.localScale;
         margin = size.magnitude * 0.9f;
+        line_size = line_prefab.transform.localScale.y;
 
-        Barrier first_barrier = new Barrier(difficulty, new Vector2(0, start_line.transform.localPosition.y), margin);
-        first_barrier.create_visuals(line_prefab, pivot_prefab);
-        // Barrier first_barrier = new Barrier(3, new Vector2(0, start_line.transform.localPosition.y), line_prefab, pivot_prefab, margin);
-        // barriers.Add(first_barrier);
-    }
+        Barrier new_barrier = new Barrier(new Vector2(0, start_line.localPosition.y), difficulty, line_size, margin);
+        new_barrier.visualize(line_prefab, pivot_prefab);
+        barriers.Add(new_barrier);
+    }   
 
     void Update()
     {
-        // if (barriers.Count > 0) {
-        //     create_barrier();
-        //     move_barriers();
-        // }
-    }
-
-    void move_barriers(){
-        foreach (Barrier b in barriers) {
-            Vector2 loc = b.pivot.transform.position;
-            loc.y -= barrier_speed;
-            b.pivot.transform.position = loc;
+        if (barriers.Count > 0) {
+            foreach (Barrier b in barriers) {
+                b.move(barrier_speed);
+            }
+            if (barriers[barriers.Count - 1].pivot.localPosition.y < start_line.localPosition.y) {
+                new_barrier();
+            }
         }
     }
 
-    // void create_barrier() {
-    //     if (barriers[barriers.Count - 1].pivot.transform.position.y <= start_line.position.y){            
-    //         Vector2 new_pivot_loc = barriers[barriers.Count - 1].get_next_pivot();
-    //         Barrier new_barrier = new Barrier(3, new_pivot_loc, line_prefab, pivot_prefab, margin);
-    //         Vector2 next_pivot = new_barrier.get_next_pivot();
-    //         while (next_pivot.x > left_bound.localPosition.x && next_pivot.x < right_bound.localPosition.x) {
-    //             new_barrier = new Barrier(3, new_pivot_loc, line_prefab, pivot_prefab, margin);
-    //             next_pivot = new_barrier.get_next_pivot();
-    //         }
-    //         new_barrier.rand_diff_rotate(difficulty);
-    //         barriers.Add(new_barrier);
-    //     }
-    // }
+    void new_barrier(){
+        Barrier new_barrier = new Barrier(barriers[barriers.Count - 1].next_pt, difficulty, line_size, margin);
+        new_barrier.visualize(line_prefab, pivot_prefab);
+        barriers.Add(new_barrier);
+    }
 
     enum GameLevel {Easy, Medium, Hard, Insane};
 
     class Barrier {
-        public int ysize = 1;
-        public GameObject line;
-        public GameObject pivot;
-
+        public Vector2 pivot_pt;
+        public Vector2 line_pt;
         public Vector2 next_pt;
-        public Vector2 loc;
         public float angle;
-        public float line_length;
-        public float margin;
+        public float line_scale;
 
-        public void Barrier_v1(int size, Vector2 position, GameObject l, GameObject p, float margin) {
-            pivot = Instantiate(p, Vector2.zero, Quaternion.identity);
-            line = Instantiate(l, Vector2.zero, Quaternion.identity);
+        public Transform line;
+        public Transform pivot;
 
-            Vector3 lscale = l.transform.localScale;
-            lscale.y *= size;
-            line.transform.localScale = lscale;
+        public Barrier(Vector2 position, GameLevel level, float line_size, float margin) {
+            pivot_pt = position;
 
-            Vector3 loc = l.transform.localPosition;
-            loc.y += (lscale.y / 2) + margin;
-            line.transform.localPosition = loc;
-            
-            line.transform.parent = pivot.transform;
+            do {
+                angle = rand_diff_rotate(level);
+                line_scale = get_line_length(level);
 
-            Transform nextPivotPt = pivot.transform.GetChild(0);
-            Vector3 next_pivot_loc = nextPivotPt.localPosition;
-            next_pivot_loc.y += loc.y * 2 + size;
-            pivot.transform.GetChild(0).localPosition = next_pivot_loc;
+                next_pt = new Vector2(0, line_scale * line_size + margin * 2);
+                next_pt = Quaternion.Euler(0, 0, angle) * next_pt;
+                next_pt += pivot_pt;
+            } while (next_pt.x < -2.6 || next_pt.x > 2.6); 
 
-            pivot.transform.localPosition = position;
-
-            create_edge(pivot.transform.position, next_pivot_loc);
+            line_pt = new Vector2(0, (line_scale * line_size)/2 + margin);
+            line_pt = Quaternion.Euler(0, 0, angle) * line_pt;
+            line_pt += pivot_pt;
         }
 
+        public void visualize(GameObject l, GameObject p) {
+            line = Instantiate(l, line_pt, Quaternion.Euler(0, 0, angle)).transform;
+            Vector2 line_local_scale = line.transform.localScale;
+            line_local_scale.y *= line_scale;
+            line.transform.localScale = line_local_scale;
 
-
-
-
-        public Barrier(GameLevel level, Vector2 position, float m) {
-            loc = position;
-            margin = m;
-            line_length = get_line_length(level);
-            angle = rand_diff_rotate(level);
-            Debug.Log(angle);
-            next_pt = new Vector2(0f, line_length + margin * 2);
-            next_pt = Quaternion.Euler(0, 0, angle) * next_pt;
+            pivot = Instantiate(p, pivot_pt, Quaternion.identity).transform;
         }
-
-        public void create_visuals(GameObject l, GameObject p) {
-            pivot = Instantiate(p, Vector2.zero, Quaternion.identity);
-            line = Instantiate(l, Vector2.zero, Quaternion.identity);
-
-            Vector3 lscale = l.transform.localScale;
-            lscale.y *= line_length;
-            line.transform.localScale = lscale;
-
-            Vector2 line_pos = (next_pt - loc) + loc;
-            line.transform.localPosition = line_pos;
-            line.transform.parent = pivot.transform;
-
-            pivot.transform.GetChild(0).localPosition = next_pt;
-
-        }
-
-
-
-
 
         public float get_line_length(GameLevel level) {
             if (level == GameLevel.Easy) {
-                return 5f;
+                return Random.Range(5, 7);
             }
             return 5f;
-        }
-
-        private void create_edge(Vector2 start, Vector2 end) {
-            EdgeCollider2D edge = pivot.AddComponent(typeof(EdgeCollider2D)) as EdgeCollider2D;
-            edge.points = new Vector2[] {start, end};
-        }
-
-        public void rotate(float degree) {
-            pivot.transform.eulerAngles = new Vector3(0, 0, degree);
         }
 
         public float rand_diff_rotate(GameLevel level) {
@@ -153,8 +100,16 @@ public class LineManager : MonoBehaviour
             return 0f;
         }
 
-        public Vector2 get_next_pivot() {
-            return pivot.transform.GetChild(0).position;
+        public void move(float speed) {
+            Vector2 line_pos = line.localPosition;
+            line_pos.y -= speed;
+            line.localPosition = line_pos;
+
+            Vector2 pivot_pos = pivot.localPosition;
+            pivot_pos.y -= speed;
+            pivot.localPosition = pivot_pos;
+
+            next_pt.y -= speed;
         }
     }
 }
