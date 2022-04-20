@@ -10,193 +10,193 @@ public class LineManager : MonoBehaviour
 
     public Transform start_line;
     public Transform finish_line;
-    public float barrier_speed = 0.001f;
 
-    private GameLevel difficulty;
-    List<Barrier> barriers = new List<Barrier>();
-    float margin;
-    float line_size;
+    Information info;
 
     void Start()
     {
-        difficulty = GameLevel.Easy;
+       info = new Information(line_prefab.transform.localScale.x, pivot_prefab.transform.localScale.x * 0.9f, start_line.localPosition.y, finish_line.localPosition.y);
 
-        Vector2 size = pivot_prefab.transform.localScale;
-        margin = size.magnitude * 0.9f;
-        line_size = line_prefab.transform.localScale.y;
-
-        Barrier new_barrier = new Barrier(new Vector2(0, start_line.localPosition.y), difficulty, line_size, margin, 360, barriers);
-        new_barrier.visualize(line_prefab, pivot_prefab);
-        barriers.Add(new_barrier);
-        
+       create_barrier();
     }   
 
     void Update()
     {
-        if (barriers.Count > 0) {
-            bool remove = false;
-            for (int i = 0; i < barriers.Count; i++) {
-                barriers[i].move(barrier_speed);
-                if (barriers[0].pivot.transform.localPosition.y <= finish_line.transform.localPosition.y) {
-                    barriers[i].destroy();
-                    remove = true;
-                    break;
-                }
-            }
-            if (remove) {barriers.RemoveAt(0);}
-
-            if (barriers[barriers.Count - 1].pivot.localPosition.y < start_line.localPosition.y) {
-                new_barrier();
+        if (info.all_barriers.Count > 0){
+            info.move();
+            if (info.next_pt.y < start_line.localPosition.y) {
+                create_barrier();
             }
         }
     }
 
-    void new_barrier(){
-        Barrier prev_barrier = barriers[barriers.Count-1];
-        Barrier new_barrier = new Barrier(prev_barrier.next_pt, difficulty, line_size, margin, prev_barrier.angle, barriers);
-        new_barrier.visualize(line_prefab, pivot_prefab);
-        barriers.Add(new_barrier);
+    public enum GameLevel {Easy, Medium, Hard, Insane};
+
+    public void create_barrier(){
+        Barrier new_barrier = new Barrier(info);
+        new_barrier.Visualize(pivot_prefab, line_prefab);
+        info.add_barrier(new_barrier);
     }
 
-    enum GameLevel {Easy, Medium, Hard, Insane};
-
-    class Barrier {
+    public class Barrier {
+        public GameObject pivot_gameobject;
+        public GameObject line_gameobject;
         public Vector2 pivot_pt;
-        public Vector2 line_pt;
         public Vector2 next_pt;
-        public float angle;
-        public float line_scale;
+        public Vector2 line_pt;
 
-        public GameObject line_go;
-        public GameObject pivot_go;
-        public EdgeCollider2D edge;
+        public AngleLength angle_linescaler;
 
-        public Transform line;
-        public Transform pivot;
+        public Barrier(Information info) {
+            this.pivot_pt = info.next_pt;
+            this.next_pt = get_next_pt(info, info.get_angle_lengths());
+            this.line_pt = this.pivot_pt + (this.next_pt - this.pivot_pt)/2f;
 
-        public Barrier(Vector2 position, GameLevel level, float line_size, float margin, float prev_angle, List<Barrier> barriers) {
-            pivot_pt = position;
-            GameLevel l = level;
-
-            // if (Mathf.Abs(position.x) > 2 || Mathf.Abs(prev_angle) > 90) {
-            //     l = GameLevel.Easy;
-            // }
-
-            // int count = 0;
-            // do {
-            //     angle = rand_diff_rotate(l);
-            //     line_scale = get_line_length(l);
-
-            //     next_pt = new Vector2(0, line_scale * line_size + margin * 2);
-            //     next_pt = Quaternion.Euler(0, 0, angle) * next_pt;
-            //     next_pt += pivot_pt;
-
-            //     count += 1;
-            //     if (count > 100) {
-            //         Debug.Log("Taking too long");
-            //         break;
-            //     }
-            // } while (!meets_contraints(prev_angle, angle, next_pt) || count > 100); 
-
-            next_pt = find_next_pt(get_angles(l), get_line_lengths(l), line_size, margin, barriers, prev_angle);
-
-
-            line_pt = new Vector2(0, (line_scale * line_size)/2 + margin);
-            line_pt = Quaternion.Euler(0, 0, angle) * line_pt;
-            line_pt += pivot_pt;
+            info.next_pt = this.next_pt;
         }
 
-        public bool meets_contraints(float prev_angle, float curr_angle, Vector2 test_pt) {
-            if (Mathf.Abs(next_pt.x) > 2.6) {
-                return false;
-            } else if (curr_angle >= 0 && prev_angle == curr_angle - 180) {
-                return false;
-            } else if (curr_angle < 0 && prev_angle == curr_angle + 180) {
-                return false;
-            }
+        public void Visualize(GameObject pivot_prefab, GameObject line_prefab) {
+            this.pivot_gameobject = Instantiate(pivot_prefab, pivot_pt, Quaternion.identity);
+            this.line_gameobject = Instantiate(line_prefab, line_pt, Quaternion.identity);
 
-            return true;
+            Vector2 current_line_scale = this.line_gameobject.transform.localScale;
+            current_line_scale.y *= this.angle_linescaler.length;
+            this.line_gameobject.transform.localScale = current_line_scale;
+
+            this.line_gameobject.transform.rotation = Quaternion.Euler(0,0, this.angle_linescaler.angle);
         }
 
-        public Vector2 find_next_pt(List<int> angles, List<int> lengths, float line_size, float margin, List<Barrier> barriers, float prev_angle) {
-            int angle_index = Random.Range(0, angles.Count);
-            int length_index = Random.Range(0, lengths.Count);
-            angle = angles[angle_index];
-            line_scale = lengths[length_index];
+        public void DestroyObjects(){
+            DestroyImmediate(pivot_gameobject);
+            DestroyImmediate(line_gameobject);
+        }
 
-            Vector2 test_pt = new Vector2(0, line_scale * line_size + margin * 2);
-            test_pt = Quaternion.Euler(0, 0, angle) * test_pt;
+        private Vector2 get_next_pt(Information info, List<AngleLength> angle_lengths){
+            int angle_len_index = Random.Range(0, angle_lengths.Count);
+            this.angle_linescaler = angle_lengths[angle_len_index];
+            // this.angle_linescaler = test_angle_length;
+
+            Vector2 test_pt = new Vector2(0, info.get_next_y_dist(this.angle_linescaler.length));
+            test_pt = Quaternion.Euler(0, 0, this.angle_linescaler.angle) * test_pt;
             test_pt += pivot_pt;
 
-            foreach (Barrier b in barriers) {
-                if (!meets_contraints(prev_angle, angle, test_pt)){
-                    angles.RemoveAt(angle_index);
-                    test_pt = find_next_pt(angles, lengths, line_size, margin, barriers, prev_angle);
-                    break;
-                }
+            if (!passes_contraints(test_pt, info)){
+                angle_lengths.RemoveAt(angle_len_index);
+                test_pt = get_next_pt(info, angle_lengths);
             }
-            
+
             return test_pt;
         }
 
-
-        public bool ccw(Vector2 A, Vector2 B, Vector2 C){
-            return (C.y-A.y) * (B.x-A.x) > (B.y-A.y) * (C.x-A.x);
-        }
-
-        public bool intersect(Vector2 A, Vector2 B, Vector2 C, Vector2 D) {
-            return ccw(A,C,D) != ccw(B,C,D) && ccw(A,B,C) != ccw(A,B,D);
-        }
-
-        public void visualize(GameObject l, GameObject p) {
-            line_go = Instantiate(l, line_pt, Quaternion.Euler(0, 0, angle));
-            line = line_go.transform;
-            Vector2 line_local_scale = line.transform.localScale;
-            line_local_scale.y *= line_scale;
-            line.transform.localScale = line_local_scale;
-
-            pivot_go = Instantiate(p, pivot_pt, Quaternion.identity);
-            pivot = pivot_go.transform;
-            
-            edge = pivot_go.GetComponent<EdgeCollider2D>();
-            edge.points = new Vector2[] {Vector2.zero, (next_pt - pivot_pt) * (1f / pivot.localScale.x)};
-        }
-
-        public List<int> get_line_lengths(GameLevel level) {
-            if (level == GameLevel.Easy) {
-                return new List<int>() {9, 10, 11, 12, 13};
-            } else if (level == GameLevel.Medium) {
-                return new List<int>() {6, 7, 8, 9, 10, 11, 12, 13};
+        private bool passes_contraints(Vector2 test_pt, Information info){
+            if (Mathf.Abs(test_pt.x) > 2.5){
+                return false;
+            } else if (this.angle_linescaler.angle - 180 == info.latest_angle || this.angle_linescaler.angle + 180 == info.latest_angle){
+                return false;
+            } else if (info.level != GameLevel.Easy) {
+                if (test_pt.x > 0 && this.angle_linescaler.angle > 90){
+                    return false;
+                } else if (test_pt.x < 0 && this.angle_linescaler.angle < -90){
+                    return false;
+                }
             }
-            return new List<int>();
+            return true;
+        }
+    }
+
+    public class Information {
+        public List<Barrier> all_barriers = new List<Barrier>();
+        public List<Transform> all_transforms = new List<Transform>();
+        private List<AngleLength> easy = new List<AngleLength>();
+        public List<AngleLength> medium = new List<AngleLength>();
+        public List<AngleLength> hard = new List<AngleLength>();
+
+        public float line_prefab_scale;
+        public float latest_angle;
+        public float margin;
+        public Vector2 next_pt;
+        public GameLevel level;
+        public float barrier_speed = 0.02f;
+        public float end_y;
+        public List<AngleLength> temp;
+
+        public Information(float line_prefab_scale, float margin, float start_y, float end_y){
+            next_pt = new Vector2(0, start_y);
+            this.level = GameLevel.Medium;
+            this.end_y = end_y;
+            create_angle_length_options();
+            this.line_prefab_scale = line_prefab_scale;
+            this.margin = margin;
         }
 
-        public List<int> get_angles(GameLevel level) {
-            if (level == GameLevel.Easy) {
-                return new List<int>() {-90, -80, -70, -60, -50, -40, -30, -20, -10, 0, 10, 20, 30, 40, 50, 60, 70, 80, 90};
-            } else if (level == GameLevel.Medium) {
-                return new List<int>() {-180, -170, -160, -150, -140, -130, -120, -110, -100, -90, -80, -70, -60, -50, -40, -30, -20, -10, 0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180};
+        public float get_next_y_dist(float line_length) {
+            return (line_length * this.line_prefab_scale) + (this.margin * 2);
+        }
+
+        public List<AngleLength> get_angle_lengths(){
+            if (this.level == GameLevel.Easy) {
+                print("Easy Mode");
+                return new List<AngleLength>(this.easy);
+            } else if (this.level == GameLevel.Medium){
+                print("Medium Mode");
+                return new List<AngleLength>(this.medium);
             }
-
-            return new List<int>() {-90, -80, -70, -60, -50, -40, -30, -20, -10, 0, 10, 20, 30, 40, 50, 60, 70, 80, 90};
+            return new List<AngleLength>(this.easy);
         }
 
-        public void destroy() {
-            Destroy(pivot_go);
-            Destroy(line_go);
+        
+
+        public void create_angle_length_options(){
+            for (int i = -90; i <= 90; i += 10){
+                for (int j = 7; j <= 15; j++) {
+                    this.easy.Add(new AngleLength(i, j));
+                }
+            }
+            for (int i = -130; i <= 130; i += 10){
+                for (int j = 7; j <= 12; j++) {
+                    this.medium.Add(new AngleLength(i, j));
+                }
+            }
+            for (int i = -180; i <= 180; i += 10){
+                for (int j = 5; j <= 10; j++) {
+                    this.hard.Add(new AngleLength(i, j));
+                }
+            }
         }
 
-        public void move(float speed) {
-            Vector2 line_pos = line.localPosition;
-            line_pos.y -= speed;
-            line.localPosition = line_pos;
+        public void add_barrier(Barrier b){
+            this.all_barriers.Add(b);
+            this.all_transforms.Add(b.pivot_gameobject.transform);
+            this.all_transforms.Add(b.line_gameobject.transform);
+            this.next_pt = b.next_pt;
+            this.latest_angle = b.angle_linescaler.angle;
+        }
 
-            Vector2 pivot_pos = pivot.localPosition;
-            pivot_pos.y -= speed;
-            pivot.localPosition = pivot_pos;
+        public void move(){
+            for (int i = all_transforms.Count - 1; i >= 0; i--) {
+                Vector2 b_loc = all_transforms[i].localPosition;
+                b_loc.y -= barrier_speed;
+                all_transforms[i].localPosition = b_loc;
+                
+            }
+            next_pt.y -= barrier_speed;
+        }
 
-            next_pt.y -= speed;
-            pivot_pt.y -= speed;
+        public bool game_over(float y_pos) {
+            if (y_pos < end_y){
+                return true;
+            }
+            return false;
+        }
+    }
+
+    public class AngleLength {
+        public float angle;
+        public float length;
+
+        public AngleLength(float angle, float length){
+            this.angle = angle;
+            this.length = length;
         }
     }
 }
