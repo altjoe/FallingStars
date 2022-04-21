@@ -15,17 +15,39 @@ public class LineManager : MonoBehaviour
 
     void Start()
     {
-       info = new Information(line_prefab.transform.localScale.x, pivot_prefab.transform.localScale.x * 0.9f, start_line.localPosition.y, finish_line.localPosition.y);
-
+       info = new Information(line_prefab.transform.localScale.x, pivot_prefab.transform.localScale.x * 0.9f, start_line.localPosition.y - 3, finish_line.localPosition.y);
        create_barrier();
     }   
 
     void Update()
     {
         if (info.all_barriers.Count > 0){
-            info.move();
+            handle_touch(info);
+            info.move(Time.deltaTime);
             if (info.next_pt.y < start_line.localPosition.y) {
                 create_barrier();
+            }
+        }
+    }
+
+    public void handle_touch(Information info){
+        if (Input.touchCount > 0){
+            Touch touch = Input.GetTouch(0);
+            Vector2 pos = Camera.main.ScreenToWorldPoint(touch.position);
+            switch (touch.phase)
+            {
+                
+                case TouchPhase.Began:
+                    info.began_touch(pos);
+                    break;
+                case TouchPhase.Moved:
+                    info.moved_touch(pos);
+                    break;
+                case TouchPhase.Ended:
+                    info.end_touch();
+                    break;
+                default:
+                    break;
             }
         }
     }
@@ -134,6 +156,8 @@ public class LineManager : MonoBehaviour
                     return false;
                 } else if (perp_dist(b.pivot_pt, this.pivot_pt, test_pt) < 0.3){
                     return false;
+                }   else if ((b.pivot_pt - test_pt).magnitude < 0.3 || (b.next_pt - test_pt).magnitude < 0.3 ){
+                    return false;
                 }
             }
 
@@ -188,7 +212,6 @@ public class LineManager : MonoBehaviour
 
     public class Information {
         public List<Barrier> all_barriers = new List<Barrier>();
-        public List<Transform> all_transforms = new List<Transform>();
         private List<AngleLength> easy = new List<AngleLength>();
         public List<AngleLength> medium = new List<AngleLength>();
         public List<AngleLength> hard = new List<AngleLength>();
@@ -198,13 +221,15 @@ public class LineManager : MonoBehaviour
         public float margin;
         public Vector2 next_pt;
         public GameLevel level;
-        public float barrier_speed = 0.02f;
+        public float barrier_speed = 2f;
         public float end_y;
         public List<AngleLength> temp;
+        public List<Vector2> prev_touches;
 
         public Information(float line_prefab_scale, float margin, float start_y, float end_y){
+            prev_touches = new List<Vector2>();
             next_pt = new Vector2(0, start_y);
-            this.level = GameLevel.Hard;
+            this.level = GameLevel.Easy;
             this.end_y = end_y;
             create_angle_length_options();
             this.line_prefab_scale = line_prefab_scale;
@@ -217,13 +242,10 @@ public class LineManager : MonoBehaviour
 
         public List<AngleLength> get_angle_lengths(){
             if (this.level == GameLevel.Easy) {
-                print("Easy Mode");
                 return new List<AngleLength>(this.easy);
             } else if (this.level == GameLevel.Medium){
-                print("Medium Mode");
                 return new List<AngleLength>(this.medium);
             } else {
-                print("Hard Mode");
                 return new List<AngleLength>(this.hard);
             }
             // return new List<AngleLength>(this.easy);
@@ -251,18 +273,16 @@ public class LineManager : MonoBehaviour
 
         public void add_barrier(Barrier b){
             this.all_barriers.Add(b);
-            this.all_transforms.Add(b.pivot_gameobject.transform);
-            this.all_transforms.Add(b.line_gameobject.transform);
             this.next_pt = b.next_pt;
             this.latest_angle = b.angle_linescaler.angle;
         }
 
-        public void move(){
+        public void move(float timedelta){
             foreach (Barrier b in all_barriers) {
-                b.move(barrier_speed);
+                b.move(barrier_speed * timedelta);
             }
 
-            next_pt.y -= barrier_speed;
+            next_pt.y -= barrier_speed * timedelta;
         }
 
         public bool game_over(float y_pos) {
@@ -270,6 +290,44 @@ public class LineManager : MonoBehaviour
                 return true;
             }
             return false;
+        }
+
+        public void began_touch(Vector2 touch){
+            prev_touches.Add(touch);
+        }
+
+        public void moved_touch(Vector2 touch){
+            prev_touches.Add(touch);
+            if (prev_touches.Count > 5){
+                prev_touches.RemoveAt(0);
+            }
+
+            while (true) {
+                bool intersects = false;
+                for (int i = 0; i < prev_touches.Count - 1; i++) {
+                    if (intersect(all_barriers[0].pivot_pt, all_barriers[0].next_pt, prev_touches[i], prev_touches[i+1])){
+                        all_barriers[0].DestroyObjects();
+                        all_barriers.RemoveAt(0);
+                        intersects = true;
+                        break;
+                    }
+                }
+                if (!intersects){
+                    break;
+                }
+            }
+        }
+
+        public void end_touch(){
+            prev_touches = new List<Vector2>();
+        }
+
+        public bool ccw(Vector2 A, Vector2 B, Vector2 C){
+            return (C.y-A.y) * (B.x-A.x) > (B.y-A.y) * (C.x-A.x);
+        }
+
+        public bool intersect(Vector2 A, Vector2 B, Vector2 C, Vector2 D) {
+            return ccw(A,C,D) != ccw(B,C,D) && ccw(A,B,C) != ccw(A,B,D);
         }
     }
 
